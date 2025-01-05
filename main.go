@@ -8,6 +8,7 @@ import (
 	"gorm.io/gorm"
 	"math/rand"
 	"net/http"
+	"os"
 )
 
 type Book struct {
@@ -81,15 +82,35 @@ func addBook(c *gin.Context) {
 	c.JSON(http.StatusCreated, book)
 }
 
+// get books by id
+
+func getBookID(c *gin.Context) {
+	var book Book
+	id := c.Param("id")
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "book not found"})
+	}
+	c.JSON(http.StatusOK, book)
+}
+
 // delete books
 
 func deleteBook(c *gin.Context) {
 	var book Book
-	if err := c.ShouldBindJSON(&book); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	id := c.Param("id")
+	fmt.Printf("Attempting to delete book with ID: %s\n", id)
+	// Find the book by ID
+	if err := db.First(&book, id).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Book not found"})
 		return
 	}
-	db.Delete(&book)
+	fmt.Printf("Found book: %+v\n", book)
+	// Delete the book
+	if err := db.Delete(&book).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete book"})
+		return
+	}
+	fmt.Printf("Successfully deleted book with ID: %s\n", id)
 	c.JSON(http.StatusOK, book)
 }
 
@@ -102,9 +123,14 @@ func main() {
 	router := gin.Default()
 	router.GET("/books", getBooks)
 	router.POST("/books", addBook)
-	router.DELETE("/books", deleteBook)
+	router.DELETE("/books/:id", deleteBook)
+	router.GET("/books/:id", getBookID)
 	fmt.Println("Starting server at http://localhost:8081")
-	err := router.Run("localhost:8081")
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8081" // Default port if not set by Heroku
+	}
+	err := router.Run(":" + port)
 	if err != nil {
 		return
 	}
